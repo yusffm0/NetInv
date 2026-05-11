@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NIMS — User Management</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin:0; padding:0; }
+:root {
+  --bg:        #0f1117;
+  --surface:   #1a1d27;
+  --surface2:  #22263a;
+  --border:    #2a2d3a;
+  --accent:    #4f8ef7;
+  --accent-h:  #3a75e0;
+  --text:      #e2e8f0;
+  --muted:     #8892a4;
+  --danger:    #e05252;
+  --success:   #3ecf8e;
+  --warning:   #f59e0b;
+  --radius:    8px;
+  --shadow:    0 4px 24px rgba(0,0,0,.35);
+}
+body { font-family:'Inter',sans-serif; background:var(--bg); color:var(--text); min-height:100vh; font-size:14px; }
+.topbar { position:sticky; top:0; z-index:100; background:var(--surface); border-bottom:1px solid var(--border); display:flex; align-items:center; gap:16px; padding:0 24px; height:56px; }
+.topbar-brand { display:flex; align-items:center; gap:10px; font-weight:700; font-size:16px; }
+.topbar-brand span { color:var(--accent); }
+.topbar-actions { margin-left:auto; display:flex; align-items:center; gap:10px; }
+.user-chip { font-size:12px; color:var(--muted); }
+.btn { display:inline-flex; align-items:center; gap:6px; padding:7px 14px; border-radius:var(--radius); font-size:13px; font-weight:500; cursor:pointer; border:none; font-family:inherit; transition:.15s; }
+.btn-primary { background:var(--accent); color:#fff; }
+.btn-primary:hover { background:var(--accent-h); }
+.btn-ghost { background:transparent; color:var(--muted); border:1px solid var(--border); }
+.btn-ghost:hover { background:var(--surface2); color:var(--text); }
+.btn-danger { background:var(--danger); color:#fff; }
+.btn-danger:hover { filter:brightness(1.1); }
+.btn-success { background:var(--success); color:#0f1117; }
+.btn-success:hover { filter:brightness(.9); }
+.btn-sm { padding:5px 10px; font-size:12px; }
+.btn:disabled { opacity:.5; cursor:not-allowed; }
+.page { padding:24px; max-width:1200px; margin:0 auto; }
+.section-hdr { display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; }
+.section-hdr h2 { font-size:16px; font-weight:600; }
+.table-wrap { background:var(--surface); border:1px solid var(--border); border-radius:12px; overflow:auto; }
+table { width:100%; border-collapse:collapse; }
+thead th { padding:12px 14px; text-align:left; font-size:11px; font-weight:600; color:var(--muted); text-transform:uppercase; letter-spacing:.06em; border-bottom:1px solid var(--border); white-space:nowrap; }
+tbody tr:hover { background:var(--surface2); }
+tbody td { padding:11px 14px; border-bottom:1px solid var(--border); vertical-align:middle; }
+.form-group { margin-bottom:16px; }
+.form-group label { display:block; font-size:12px; font-weight:500; color:var(--muted); margin-bottom:6px; }
+.form-group input, .form-group select { width:100%; background:var(--bg); border:1px solid var(--border); border-radius:var(--radius); color:var(--text); padding:9px 12px; font-size:13px; font-family:inherit; outline:none; }
+.form-group input:focus, .form-group select:focus { border-color:var(--accent); }
+.modal { background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:32px; width:100%; max-width:500px; box-shadow:var(--shadow); }
+.overlay { position:fixed; inset:0; background:rgba(0,0,0,.65); display:flex; align-items:center; justify-content:center; z-index:1000; backdrop-filter:blur(2px); }
+.overlay.hidden { display:none; }
+.modal-actions { display:flex; gap:10px; justify-content:flex-end; margin-top:24px; }
+#toast-container { position:fixed; bottom:24px; right:24px; display:flex; flex-direction:column; gap:8px; z-index:2000; }
+.toast { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:12px 18px; font-size:13px; min-width:220px; box-shadow:var(--shadow); animation:toastIn .25s ease; display:flex; align-items:center; gap:10px; }
+.toast.success { border-left:3px solid var(--success); }
+.toast.error   { border-left:3px solid var(--danger); }
+.toast.info    { border-left:3px solid var(--accent); }
+@keyframes toastIn { from{transform:translateX(40px);opacity:0} to{transform:translateX(0);opacity:1} }
+</style>
+</head>
+<body>
+<nav class="topbar">
+  <div class="topbar-brand">👥 <span>Users</span> <span style="font-weight:300;color:var(--muted)">User Management</span></div>
+  <div class="topbar-actions">
+    <span class="user-chip" id="userChip"></span>
+    <a href="/" class="btn btn-ghost btn-sm">Inventory</a>
+    <a href="/logout" class="btn btn-ghost btn-sm">Sign Out</a>
+  </div>
+</nav>
+<div class="page">
+  <div class="section-hdr">
+    <h2>Manage Users</h2>
+    <button class="btn btn-primary btn-sm" onclick="openUserModal()">＋ Add User</button>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Username</th>
+          <th>Role</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody id="usersBody">
+        <tr><td colspan="4" style="text-align:center;padding:30px;color:var(--muted)">Loading…</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+<div class="overlay hidden" id="userOverlay">
+  <div class="modal">
+    <h2 id="userModalTitle">Add User</h2>
+    <div class="form-group">
+      <label>Username</label>
+      <input type="text" id="uName" placeholder="Username">
+    </div>
+    <div class="form-group">
+      <label>Password</label>
+      <input type="password" id="uPassword" placeholder="Password">
+    </div>
+    <div class="form-group">
+      <label>Role</label>
+      <select id="uRole">
+        <option value="viewer">Viewer</option>
+        <option value="editor">Editor</option>
+        <option value="admin">Admin</option>
+      </select>
+    </div>
+    <input type="hidden" id="uId">
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeUserModal()">Cancel</button>
+      <button class="btn btn-primary" id="saveUserBtn" onclick="saveUser()">Save</button>
+    </div>
+  </div>
+</div>
+<div id="toast-container"></div>
+<script>
+const isAdmin = '{{ user_role }}' === 'admin';
+let users = [];
+
+function esc(str) { return String(str||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function toast(msg, type='info') {
+  const el = document.createElement('div');
+  el.className = `toast ${type}`;
+  const icons = {success:'✅', error:'❌', info:'ℹ️'};
+  el.innerHTML = `<span>${icons[type]||'ℹ️'}</span><span>${esc(msg)}</span>`;
+  document.getElementById('toast-container').appendChild(el);
+  setTimeout(() => { el.style.transition='opacity .4s'; el.style.opacity='0'; setTimeout(()=>el.remove(),400); }, 3200);
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  const user = '{{ session.get("display_name") or session.get("username") }}';
+  document.getElementById('userChip').textContent = user ? `👤 ${user}` : '';
+  loadUsers();
+});
+
+async function loadUsers() {
+  try {
+    const res = await fetch('/api/users');
+    users = await res.json();
+    const tbody = document.getElementById('usersBody');
+    if (!users.length) {
+      tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;padding:30px;color:var(--muted)">No users found.</td></tr>`;
+      return;
+    }
+    tbody.innerHTML = users.map(u => `
+      <tr>
+        <td>${u.id}</td>
+        <td>${esc(u.username)}</td>
+        <td>${esc(u.role)}</td>
+        <td style="display:flex;gap:8px">
+          <button class="btn btn-sm btn-ghost" onclick="openUserModal(${u.id})">Edit</button>
+          <button class="btn btn-sm btn-danger" onclick="deleteUser(${u.id}, ${JSON.stringify(esc(u.username))})">Delete</button>
+        </td>
+      </tr>`).join('');
+  } catch (e) {
+    toast('Unable to load users', 'error');
+  }
+}
+
+function openUserModal(id) {
+  document.getElementById('uId').value = id || '';
+  document.getElementById('uName').value = '';
+  document.getElementById('uPassword').value = '';
+  document.getElementById('uRole').value = 'viewer';
+  document.getElementById('userModalTitle').textContent = id ? 'Edit User' : 'Add User';
+  if (id) {
+    const user = users.find(u => u.id === id);
+    if (user) {
+      document.getElementById('uName').value = user.username;
+      document.getElementById('uRole').value = user.role;
+    }
+  }
+  document.getElementById('userOverlay').classList.remove('hidden');
+}
+
+function closeUserModal() {
+  document.getElementById('userOverlay').classList.add('hidden');
+}
+
+async function saveUser() {
+  const id = document.getElementById('uId').value;
+  const username = document.getElementById('uName').value.trim();
+  const password = document.getElementById('uPassword').value;
+  const role = document.getElementById('uRole').value;
+  if (!username) { toast('Username is required', 'error'); return; }
+  const payload = { username, role };
+  if (password) payload.password = password;
+  const url = id ? `/api/users/${id}` : '/api/users';
+  const method = id ? 'PUT' : 'POST';
+  try {
+    const res = await fetch(url, { method, headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+    const data = await res.json();
+    if (data.ok) {
+      closeUserModal();
+      loadUsers();
+      toast(id ? 'User updated' : 'User created', 'success');
+    } else {
+      toast(data.error || 'Save failed', 'error');
+    }
+  } catch(e) {
+    toast('Save failed: ' + e.message, 'error');
+  }
+}
+
+async function deleteUser(id, username) {
+  if (!confirm(`Delete user ${username}?`)) return;
+  try {
+    const res = await fetch(`/api/users/${id}`, { method:'DELETE' });
+    const data = await res.json();
+    if (data.ok) {
+      loadUsers();
+      toast('User deleted', 'success');
+    } else {
+      toast(data.error || 'Delete failed', 'error');
+    }
+  } catch(e) {
+    toast('Delete failed: ' + e.message, 'error');
+  }
+}
+
+document.getElementById('userOverlay').addEventListener('click', function(e) {
+  if (e.target === this) closeUserModal();
+});
+</script>
+</body>
+</html>

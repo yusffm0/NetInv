@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NIMS — Login</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:      #0f1117;
+    --surface: #1a1d27;
+    --border:  #2a2d3a;
+    --accent:  #4f8ef7;
+    --accent-h:#3a75e0;
+    --text:    #e2e8f0;
+    --muted:   #8892a4;
+    --danger:  #e05252;
+    --radius:  10px;
+  }
+
+  body {
+    font-family: 'Inter', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .login-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 48px 40px;
+    width: 100%;
+    max-width: 400px;
+    box-shadow: 0 20px 60px rgba(0,0,0,.4);
+  }
+
+  .logo {
+    text-align: center;
+    margin-bottom: 32px;
+  }
+  .logo-icon {
+    width: 48px; height: 48px;
+    background: var(--accent);
+    border-radius: 12px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+    margin-bottom: 12px;
+  }
+  .logo h1 { font-size: 20px; font-weight: 600; }
+  .logo p  { font-size: 13px; color: var(--muted); margin-top: 4px; }
+
+  .form-group { margin-bottom: 18px; }
+  label { display: block; font-size: 13px; font-weight: 500; color: var(--muted); margin-bottom: 6px; }
+  input[type="text"], input[type="password"] {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text);
+    padding: 11px 14px;
+    font-size: 14px;
+    font-family: inherit;
+    transition: border-color .2s;
+    outline: none;
+  }
+  input:focus { border-color: var(--accent); }
+
+  .btn {
+    width: 100%;
+    padding: 12px;
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: var(--radius);
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background .2s, transform .1s;
+    font-family: inherit;
+    margin-top: 6px;
+  }
+  .btn:hover   { background: var(--accent-h); }
+  .btn:active  { transform: scale(.98); }
+  .btn:disabled{ opacity: .6; cursor: not-allowed; }
+
+  .error-msg {
+    color: var(--danger);
+    font-size: 13px;
+    text-align: center;
+    margin-top: 12px;
+    min-height: 18px;
+  }
+</style>
+</head>
+<body>
+<div class="login-card">
+  <div class="logo">
+    <div class="logo-icon">🌐</div>
+    <h1>NIMS</h1>
+    <p>Network Inventory Management System</p>
+  </div>
+
+  <div class="form-group">
+    <label for="username">Username</label>
+    <input type="text" id="username" placeholder="Enter username" autocomplete="username">
+  </div>
+  <div class="form-group">
+    <label for="password">Password</label>
+    <input type="password" id="password" placeholder="Enter password" autocomplete="current-password">
+  </div>
+
+  <button class="btn" id="loginBtn" onclick="doLogin()">Sign In</button>
+  <div class="error-msg" id="errMsg"></div>
+</div>
+
+<script>
+  document.addEventListener('keydown', e => { if(e.key==='Enter') doLogin(); });
+
+  async function doLogin() {
+    const btn = document.getElementById('loginBtn');
+    const err = document.getElementById('errMsg');
+    err.textContent = '';
+    btn.disabled = true;
+    btn.textContent = 'Signing in…';
+
+    const fd = new FormData();
+    fd.append('username', document.getElementById('username').value.trim());
+    fd.append('password', document.getElementById('password').value);
+
+    try {
+      const res  = await fetch('/login', { method:'POST', body: fd });
+      const data = await res.json();
+      if (data.ok) {
+        window.location.href = '/inventory';
+      } else {
+        err.textContent = data.error || 'Invalid credentials';
+        btn.disabled = false;
+        btn.textContent = 'Sign In';
+      }
+    } catch(e) {
+      err.textContent = 'Connection error. Try again.';
+      btn.disabled = false;
+      btn.textContent = 'Sign In';
+    }
+  }
+</script>
+</body>
+</html>

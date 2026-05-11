@@ -1,0 +1,1071 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NIMS — Network Inventory</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* ===== Reset & variables ===== */
+*, *::before, *::after { box-sizing: border-box; margin:0; padding:0; }
+
+:root {
+  --bg:        #0f1117;
+  --surface:   #1a1d27;
+  --surface2:  #22263a;
+  --border:    #2a2d3a;
+  --accent:    #4f8ef7;
+  --accent-h:  #3a75e0;
+  --text:      #e2e8f0;
+  --muted:     #8892a4;
+  --danger:    #e05252;
+  --success:   #3ecf8e;
+  --warning:   #f59e0b;
+  --radius:    8px;
+  --shadow:    0 4px 24px rgba(0,0,0,.35);
+}
+
+body { font-family:'Inter',sans-serif; background:var(--bg); color:var(--text);
+       min-height:100vh; font-size:14px; }
+
+/* ===== Top nav ===== */
+.topbar {
+  position:sticky; top:0; z-index:100;
+  background:var(--surface); border-bottom:1px solid var(--border);
+  display:flex; align-items:center; gap:16px;
+  padding:0 24px; height:56px;
+}
+.topbar-brand { display:flex; align-items:center; gap:10px; font-weight:700; font-size:16px; }
+.topbar-brand span { color:var(--accent); }
+.topbar-actions { margin-left:auto; display:flex; align-items:center; gap:10px; }
+.user-chip { font-size:12px; color:var(--muted); }
+
+/* ===== Buttons ===== */
+.btn {
+  display:inline-flex; align-items:center; gap:6px;
+  padding:7px 14px; border-radius:var(--radius);
+  font-size:13px; font-weight:500; cursor:pointer;
+  border:none; font-family:inherit; transition:.15s;
+}
+.btn-primary { background:var(--accent); color:#fff; }
+.btn-primary:hover { background:var(--accent-h); }
+.btn-ghost { background:transparent; color:var(--muted); border:1px solid var(--border); }
+.btn-ghost:hover { background:var(--surface2); color:var(--text); }
+.btn-danger { background:var(--danger); color:#fff; }
+.btn-danger:hover { filter:brightness(1.1); }
+.btn-success { background:var(--success); color:#0f1117; }
+.btn-success:hover { filter:brightness(.9); }
+.btn-sm { padding:5px 10px; font-size:12px; }
+.btn:disabled { opacity:.5; cursor:not-allowed; }
+
+/* ===== Page layout ===== */
+.page { padding:24px; max-width:1600px; margin:0 auto; }
+
+/* ===== Stats row ===== */
+.stats-row { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:16px; margin-bottom:24px; }
+.stat-card {
+  background:var(--surface); border:1px solid var(--border);
+  border-radius:12px; padding:18px 20px;
+}
+.stat-card .label { font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.06em; }
+.stat-card .value { font-size:26px; font-weight:700; margin-top:4px; }
+.stat-card .sub   { font-size:11px; color:var(--muted); margin-top:2px; }
+
+/* ===== Toolbar ===== */
+.toolbar {
+  display:flex; flex-wrap:wrap; align-items:center; gap:10px;
+  background:var(--surface); border:1px solid var(--border);
+  border-radius:12px; padding:14px 18px; margin-bottom:16px;
+}
+.toolbar-search {
+  flex:1; min-width:200px;
+  background:var(--bg); border:1px solid var(--border);
+  border-radius:var(--radius); color:var(--text);
+  padding:8px 12px; font-size:13px; font-family:inherit; outline:none;
+  transition:border-color .2s;
+}
+.toolbar-search:focus { border-color:var(--accent); }
+.select-filter {
+  background:var(--bg); border:1px solid var(--border);
+  border-radius:var(--radius); color:var(--text);
+  padding:8px 10px; font-size:13px; font-family:inherit; outline:none;
+}
+
+/* ===== Table ===== */
+.table-wrap {
+  background:var(--surface); border:1px solid var(--border);
+  border-radius:12px; overflow:auto;
+}
+table { width:100%; border-collapse:collapse; }
+thead th {
+  padding:12px 14px; text-align:left;
+  font-size:11px; font-weight:600; color:var(--muted);
+  text-transform:uppercase; letter-spacing:.06em;
+  border-bottom:1px solid var(--border);
+  white-space:nowrap;
+}
+thead th.sortable { cursor:pointer; user-select:none; }
+thead th.sortable:hover { color:var(--text); }
+tbody tr { transition:background .1s; }
+tbody tr:hover { background:var(--surface2); }
+tbody td {
+  padding:11px 14px; border-bottom:1px solid var(--border);
+  vertical-align:middle; white-space:nowrap;
+}
+tbody tr:last-child td { border-bottom:none; }
+
+/* ===== Inline edit ===== */
+.editable-cell { cursor:text; }
+.editable-cell:hover { background:rgba(79,142,247,.08); border-radius:4px; }
+.cell-input {
+  background:transparent; border:none; border-bottom:1px solid var(--accent);
+  color:var(--text); font-size:13px; font-family:inherit; outline:none;
+  width:100%; min-width:80px; padding:0 2px;
+}
+
+/* ===== Status badge ===== */
+.badge {
+  display:inline-flex; align-items:center; gap:5px;
+  padding:3px 9px; border-radius:999px; font-size:11px; font-weight:600;
+}
+.badge-active   { background:rgba(62,207,142,.15); color:var(--success); }
+.badge-inactive { background:rgba(224,82,82,.15);  color:var(--danger); }
+.badge-spare    { background:rgba(245,158,11,.15); color:var(--warning); }
+.badge-default  { background:var(--surface2); color:var(--muted); }
+
+/* ===== Pagination ===== */
+.pagination {
+  display:flex; align-items:center; justify-content:space-between;
+  padding:12px 18px; font-size:12px; color:var(--muted);
+  border-top:1px solid var(--border);
+}
+.pagination-btns { display:flex; gap:4px; }
+.pg-btn {
+  padding:4px 10px; border-radius:6px; border:1px solid var(--border);
+  background:transparent; color:var(--muted); cursor:pointer; font-size:12px;
+  transition:.15s;
+}
+.pg-btn:hover:not(:disabled) { background:var(--surface2); color:var(--text); }
+.pg-btn.active { background:var(--accent); color:#fff; border-color:var(--accent); }
+.pg-btn:disabled { opacity:.4; cursor:not-allowed; }
+
+/* ===== Section header ===== */
+.section-hdr {
+  display:flex; align-items:center; justify-content:space-between;
+  margin-bottom:14px;
+}
+.section-hdr h2 { font-size:16px; font-weight:600; }
+.section-divider { margin:40px 0 24px; border:none; border-top:1px solid var(--border); }
+
+/* ===== Modal overlay ===== */
+.overlay {
+  position:fixed; inset:0; background:rgba(0,0,0,.65);
+  display:flex; align-items:center; justify-content:center;
+  z-index:1000; backdrop-filter:blur(2px);
+  transition:opacity .2s;
+}
+.overlay.hidden { display:none; }
+.modal {
+  background:var(--surface); border:1px solid var(--border);
+  border-radius:16px; padding:32px; width:100%; max-width:480px;
+  box-shadow:var(--shadow); animation:slideUp .2s ease;
+}
+@keyframes slideUp { from{transform:translateY(20px);opacity:0} to{transform:translateY(0);opacity:1} }
+.modal h2 { font-size:17px; font-weight:600; margin-bottom:6px; }
+.modal .sub { font-size:13px; color:var(--muted); margin-bottom:24px; }
+
+.form-group { margin-bottom:16px; }
+.form-group label { display:block; font-size:12px; font-weight:500; color:var(--muted); margin-bottom:6px; }
+.form-group input, .form-group select, .form-group textarea {
+  width:100%; background:var(--bg); border:1px solid var(--border);
+  border-radius:var(--radius); color:var(--text); padding:9px 12px;
+  font-size:13px; font-family:inherit; outline:none; transition:border-color .2s;
+}
+.form-group input:focus, .form-group select:focus, .form-group textarea:focus {
+  border-color:var(--accent);
+}
+.form-row { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+.modal-actions { display:flex; gap:10px; justify-content:flex-end; margin-top:24px; }
+
+/* ===== Toast ===== */
+#toast-container {
+  position:fixed; bottom:24px; right:24px;
+  display:flex; flex-direction:column; gap:8px; z-index:2000;
+}
+.toast {
+  background:var(--surface); border:1px solid var(--border);
+  border-radius:10px; padding:12px 18px;
+  font-size:13px; min-width:220px;
+  box-shadow:var(--shadow); animation:toastIn .25s ease;
+  display:flex; align-items:center; gap:10px;
+}
+@keyframes toastIn { from{transform:translateX(40px);opacity:0} }
+.toast.success { border-left:3px solid var(--success); }
+.toast.error   { border-left:3px solid var(--danger); }
+.toast.info    { border-left:3px solid var(--accent); }
+
+/* ===== Loading spinner ===== */
+.spinner {
+  width:16px; height:16px;
+  border:2px solid var(--border); border-top-color:var(--accent);
+  border-radius:50%; animation:spin .6s linear infinite; flex-shrink:0;
+}
+@keyframes spin { to{ transform:rotate(360deg) } }
+
+/* ===== Import report ===== */
+.import-report { margin-top:16px; font-size:13px; }
+.import-report .skipped-list {
+  max-height:120px; overflow-y:auto;
+  background:var(--bg); border:1px solid var(--border);
+  border-radius:var(--radius); padding:8px 12px; margin-top:8px;
+  font-size:12px; color:var(--muted);
+}
+
+/* ===== Responsive ===== */
+@media(max-width:768px) {
+  .stats-row { grid-template-columns:1fr 1fr; }
+  .form-row  { grid-template-columns:1fr; }
+  .topbar-actions .btn span { display:none; }
+}
+</style>
+</head>
+<body>
+
+<!-- ===== TOP NAV ===== -->
+<nav class="topbar">
+  <div class="topbar-brand">🌐 <span>NIMS</span> <span style="font-weight:300;color:var(--muted)">Network Inventory</span></div>
+  <div class="topbar-actions">
+    <span class="user-chip" id="userChip"></span>
+    {% if user_role == 'admin' %}
+    <button class="btn btn-ghost btn-sm" onclick="openAddModal()"><span>＋</span> <span>Add Device</span></button>
+    {% endif %}
+    {% if show_add_user %}
+    <button class="btn btn-ghost btn-sm" onclick="window.location='/users'"><span>👤</span> <span>Users</span></button>
+    {% endif %}
+    {% if user_role == 'admin' %}
+    <button class="btn btn-ghost btn-sm" onclick="document.getElementById('importFile').click()">
+      <span>⬆</span> <span>Import</span>
+    </button>
+    <input type="file" id="importFile" accept=".xlsx,.xls" style="display:none" onchange="handleImport(event)">
+    {% endif %}
+    <a href="/export/inventory" class="btn btn-ghost btn-sm"><span>⬇</span> <span>Export</span></a>
+    <a href="/logout" class="btn btn-ghost btn-sm">Sign Out</a>
+  </div>
+</nav>
+
+<div class="page">
+
+  <!-- Stats row -->
+  <div class="stats-row" id="statsRow">
+    <div class="stat-card"><div class="label">Total Devices</div><div class="value" id="statTotal">—</div></div>
+    <div class="stat-card"><div class="label">Total Items</div><div class="value" id="statQty">—</div></div>
+    <div class="stat-card"><div class="label">Unique Brands</div><div class="value" id="statActive">—</div></div>
+    <div class="stat-card"><div class="label">Device Types</div><div class="value" id="statTypes">—</div></div>
+  </div>
+
+  <!-- Inventory section -->
+  <div class="section-hdr">
+    <h2>Inventory</h2>
+    <div style="display:flex;gap:8px">
+      <a href="/export/inventory" class="btn btn-ghost btn-sm">Export CSV</a>
+      {% if user_role == 'admin' %}
+      <button class="btn btn-primary btn-sm" onclick="openAddModal()">＋ Add Device</button>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Toolbar -->
+  <div class="toolbar">
+    <input class="toolbar-search" id="searchInput" placeholder="🔍  Search devices…" oninput="applyFilters()">
+    <select class="select-filter" id="typeFilter" onchange="applyFilters()">
+      <option value="">All Types</option>
+    </select>
+      <select class="select-filter" id="pageSizeSelect" onchange="changePageSize()">
+      <option value="25">25 / page</option>
+      <option value="50">50 / page</option>
+      <option value="100">100 / page</option>
+    </select>
+  </div>
+
+  <!-- Table -->
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th class="sortable" onclick="sortBy('id')">#</th>
+          <th class="sortable" onclick="sortBy('device_name')">Device Name</th>
+          <th class="sortable" onclick="sortBy('device_type')">Type</th>
+          <th class="sortable" onclick="sortBy('brand')">Brand</th>
+          <th>Model</th>
+          <th class="sortable" onclick="sortBy('quantity')">Qty</th>
+          <th>IP Address</th>
+          <th>MAC Address</th>
+          {% if user_role == 'admin' %}<th>Actions</th>{% endif %}
+        </tr>
+      </thead>
+      <tbody id="inventoryBody">
+        <tr><td colspan="{{ 9 if user_role == 'admin' else 8 }}" style="text-align:center;padding:40px;color:var(--muted)">
+          <div class="spinner" style="margin:0 auto 12px"></div>Loading…
+        </td></tr>
+      </tbody>
+    </table>
+    <div class="pagination">
+      <span id="pageInfo">—</span>
+      <div class="pagination-btns" id="pgBtns"></div>
+    </div>
+  </div>
+
+  <!-- Audit Log section -->
+  <hr class="section-divider">
+  <div class="section-hdr">
+    <h2>Audit Log</h2>
+    <div style="display:flex;gap:8px">
+      <a href="/export/audit" class="btn btn-ghost btn-sm">Export CSV</a>
+      {% if user_role == 'admin' %}
+      <button class="btn btn-ghost btn-sm" onclick="redoLastAction()">Redo Last</button>
+      <button class="btn btn-danger btn-sm" onclick="clearAuditLog()">Clear Log</button>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="toolbar">
+    <input class="toolbar-search" id="auditSearch" placeholder="🔍  Search audit log…" oninput="applyAuditFilters()">
+    <select class="select-filter" id="auditActionFilter" onchange="applyAuditFilters()">
+      <option value="">All Actions</option>
+      <option>LOGIN</option><option>LOGOUT</option>
+      <option>ADD</option><option>EDIT</option>
+      <option>DELETE</option><option>IMPORT</option>
+      <option>EXPORT</option>
+    </select>
+    <select class="select-filter" id="auditSort" onchange="applyAuditFilters()">
+      <option value="desc">Newest First</option>
+      <option value="asc">Oldest First</option>
+    </select>
+  </div>
+
+  <div class="table-wrap" style="margin-bottom:40px">
+    <table>
+      <thead>
+        <tr>
+          <th>Timestamp</th>
+          <th>User</th>
+          <th>IP</th>
+          <th>MAC</th>
+          <th>Action</th>
+          <th>Item</th>
+          <th>Reason</th>
+          <th>Details</th>
+          {% if user_role == 'admin' %}<th>Admin Actions</th>{% endif %}
+        </tr>
+      </thead>
+      <tbody id="auditBody">
+        <tr><td colspan="8" style="text-align:center;padding:30px;color:var(--muted)">Loading…</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div><!-- /page -->
+
+<!-- ===== ADD / EDIT DEVICE MODAL ===== -->
+<div class="overlay hidden" id="deviceOverlay">
+  <div class="modal" style="max-width:560px">
+    <h2 id="deviceModalTitle">Add Device</h2>
+    <p class="sub">Fill in device details. Fields marked * are required.</p>
+    <input type="hidden" id="deviceId">
+    <div class="form-row">
+      <div class="form-group">
+        <label>Device Name *</label>
+        <input type="text" id="fName" placeholder="e.g. Core Switch">
+      </div>
+      <div class="form-group">
+        <label>Type *</label>
+        <select id="fType">
+          <option>Switch</option><option>Router</option><option>Access Point</option>
+          <option>Firewall</option><option>Server</option><option>CCTV</option>
+          <option>Printer</option><option>Cable</option><option>Fiber Cable</option>
+          <option>Power Supply</option><option>Peripheral</option>
+          <option>Audio</option><option>Display</option>
+          <option>Accessory</option><option>Other</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Brand / Manufacturer</label>
+        <input type="text" id="fBrand" placeholder="e.g. Cisco">
+      </div>
+      <div class="form-group">
+        <label>Model</label>
+        <input type="text" id="fModel" placeholder="e.g. C9200L">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Quantity</label>
+        <input type="number" id="fQty" value="1" min="1">
+      </div>
+      <div class="form-group">
+        <label>Serial Number</label>
+        <input type="text" id="fSerial" placeholder="SN-XXXXXXX">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Asset Tag</label>
+        <input type="text" id="fAsset" placeholder="AT-XXXXXX">
+      </div>
+      <div class="form-group">
+        <label>IP Address</label>
+        <input type="text" id="fIp" placeholder="192.168.1.1">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>MAC Address</label>
+        <input type="text" id="fMac" placeholder="AA:BB:CC:DD:EE:FF">
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Notes</label>
+      <textarea id="fNotes" rows="2" placeholder="Any additional notes…"></textarea>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeDeviceModal()">Cancel</button>
+      <button class="btn btn-primary" id="saveDeviceBtn" onclick="saveDevice()">Save Device</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- ===== IMPORT PREVIEW MODAL ===== -->
+<div class="overlay hidden" id="importReviewOverlay">
+  <div class="modal" style="max-width:640px">
+    <h2>📥 Review Import</h2>
+    <p class="sub">Review duplicates and choose how to apply incoming data.</p>
+    <div id="importReviewSummary" class="import-report"></div>
+    <div id="importDuplicates"></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeImportReviewModal()">Cancel</button>
+      <button class="btn btn-primary" id="applyImportBtn" onclick="applyImportReview()">Apply Import</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== IMPORT RESULT MODAL ===== -->
+<div class="overlay hidden" id="importOverlay">
+  <div class="modal">
+    <h2>📥 Import Result</h2>
+    <div id="importReport" class="import-report"></div>
+    <div class="modal-actions">
+      <button class="btn btn-primary" onclick="closeImportModal()">Done</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== TOAST CONTAINER ===== -->
+<div id="toast-container"></div>
+
+<script>
+// =========================================================================
+// State
+// =========================================================================
+let allInventory = [];
+let filteredInventory = [];
+let allAudit = [];
+let currentPage = 1;
+let pageSize = 25;
+let sortKey = 'id';
+let sortDir = 1; // 1=asc -1=desc
+const isAdmin = '{{ user_role }}' === 'admin';
+
+// =========================================================================
+// Init
+// =========================================================================
+document.addEventListener('DOMContentLoaded', () => {
+  const user = '{{ session.get("display_name") or session.get("username") }}';
+  document.getElementById('userChip').textContent = user ? `👤 ${user}` : '';
+
+  loadInventory();
+  loadAudit();
+});
+
+// =========================================================================
+// Audit Check-in
+// =========================================================================
+// (Removed - no longer needed after login)
+
+// =========================================================================
+// Load inventory
+// =========================================================================
+async function loadInventory() {
+  try {
+    const res  = await fetch('/api/inventory');
+    allInventory = await res.json();
+    populateTypeFilter();
+    updateStats();
+    applyFilters();
+  } catch(e) {
+    toast('Failed to load inventory', 'error');
+  }
+}
+
+function populateTypeFilter() {
+  const types = [...new Set(allInventory.map(d => d.device_type).filter(Boolean))].sort();
+  const sel   = document.getElementById('typeFilter');
+  const cur   = sel.value;
+  sel.innerHTML = '<option value="">All Types</option>';
+  types.forEach(t => {
+    const o = document.createElement('option');
+    o.value = o.textContent = t;
+    sel.appendChild(o);
+  });
+  sel.value = cur;
+}
+
+function updateStats() {
+  const total  = allInventory.length;
+  const qty    = allInventory.reduce((s,d) => s + (parseInt(d.quantity)||0), 0);
+  const brands = new Set(allInventory.map(d=>d.brand).filter(Boolean)).size;
+  const types  = new Set(allInventory.map(d=>d.device_type).filter(Boolean)).size;
+  document.getElementById('statTotal').textContent  = total;
+  document.getElementById('statQty').textContent    = qty.toLocaleString();
+  document.getElementById('statActive').textContent = brands;
+  document.getElementById('statTypes').textContent  = types;
+}
+
+// =========================================================================
+// Filter / Sort / Paginate
+// =========================================================================
+function applyFilters() {
+  const q    = document.getElementById('searchInput').value.toLowerCase();
+  const type = document.getElementById('typeFilter').value;
+
+  filteredInventory = allInventory.filter(d => {
+    const matchQ = !q || [d.device_name,d.brand,d.model,d.ip_address,d.mac_address,d.serial_number]
+                          .some(v => v && v.toLowerCase().includes(q));
+    const matchT = !type || d.device_type === type;
+    return matchQ && matchT;
+  });
+
+  // sort
+  filteredInventory.sort((a,b) => {
+    let va = a[sortKey] ?? '', vb = b[sortKey] ?? '';
+    if (typeof va === 'number') return (va - vb) * sortDir;
+    return String(va).localeCompare(String(vb)) * sortDir;
+  });
+
+  currentPage = 1;
+  renderTable();
+}
+
+function sortBy(key) {
+  if (sortKey === key) sortDir *= -1; else { sortKey = key; sortDir = 1; }
+  applyFilters();
+}
+
+function changePageSize() {
+  pageSize = parseInt(document.getElementById('pageSizeSelect').value);
+  currentPage = 1;
+  renderTable();
+}
+
+// =========================================================================
+// Render table
+// =========================================================================
+function renderTable() {
+  const tbody = document.getElementById('inventoryBody');
+  const total = filteredInventory.length;
+  const pages = Math.max(1, Math.ceil(total / pageSize));
+  currentPage = Math.min(currentPage, pages);
+
+  const start = (currentPage-1) * pageSize;
+  const slice = filteredInventory.slice(start, start + pageSize);
+
+  const colCount = isAdmin ? 9 : 8;
+  if (!slice.length) {
+    tbody.innerHTML = `<tr><td colspan="${colCount}" style="text-align:center;padding:40px;color:var(--muted)">No items found</td></tr>`;
+    renderPagination(0, 0, 0); return;
+  }
+
+  tbody.innerHTML = slice.map(d => {
+    const actionCell = isAdmin ? `
+      <td style="display:flex;gap:6px">
+        <button class="btn btn-ghost btn-sm" onclick="openEditModal(${d.id})">✏️ Edit</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteItem(${d.id}, ${JSON.stringify(esc(d.device_name))})">🗑</button>
+      </td>` : '';
+    return `
+    <tr data-id="${d.id}">
+      <td style="color:var(--muted);font-size:12px">${d.id}</td>
+      <td${isAdmin ? ` class="editable-cell" ondblclick="inlineEdit(this,'device_name',${d.id})"` : ''}>${esc(d.device_name)}</td>
+      <td${isAdmin ? ` class="editable-cell" ondblclick="inlineEdit(this,'device_type',${d.id})"` : ''}>${esc(d.device_type||'')}</td>
+      <td${isAdmin ? ` class="editable-cell" ondblclick="inlineEdit(this,'brand',${d.id})"` : ''}>${esc(d.brand||'')}</td>
+      <td${isAdmin ? ` class="editable-cell" ondblclick="inlineEdit(this,'model',${d.id})"` : ''}>${esc(d.model||'')}</td>
+      <td${isAdmin ? ` class="editable-cell" ondblclick="inlineEdit(this,'quantity',${d.id})"` : ''} style="font-weight:600">${d.quantity||1}</td>
+      <td${isAdmin ? ` class="editable-cell" ondblclick="inlineEdit(this,'ip_address',${d.id})"` : ''}>${esc(d.ip_address||'—')}</td>
+      <td${isAdmin ? ` class="editable-cell" ondblclick="inlineEdit(this,'mac_address',${d.id})"` : ''}>${esc(d.mac_address||'—')}</td>
+      ${actionCell}
+    </tr>`;
+  }).join('');
+
+  renderPagination(start+1, Math.min(start+pageSize, total), total);
+  renderPageButtons(pages);
+}
+
+function renderPagination(from, to, total) {
+  document.getElementById('pageInfo').textContent =
+    total ? `Showing ${from}–${to} of ${total} items` : 'No items';
+}
+
+function renderPageButtons(pages) {
+  const container = document.getElementById('pgBtns');
+  container.innerHTML = '';
+
+  const prev = document.createElement('button');
+  prev.className='pg-btn'; prev.textContent='‹';
+  prev.disabled = currentPage===1;
+  prev.onclick = () => { currentPage--; renderTable(); };
+  container.appendChild(prev);
+
+  const window_ = 5;
+  let start = Math.max(1, currentPage - 2);
+  let end   = Math.min(pages, start + window_ - 1);
+  if (end - start < window_ - 1) start = Math.max(1, end - window_ + 1);
+
+  for (let p = start; p <= end; p++) {
+    const btn = document.createElement('button');
+    btn.className = 'pg-btn' + (p===currentPage?' active':'');
+    btn.textContent = p;
+    btn.onclick = ((_p)=>()=>{ currentPage=_p; renderTable(); })(p);
+    container.appendChild(btn);
+  }
+
+  const next = document.createElement('button');
+  next.className='pg-btn'; next.textContent='›';
+  next.disabled = currentPage===pages;
+  next.onclick = () => { currentPage++; renderTable(); };
+  container.appendChild(next);
+}
+
+// =========================================================================
+// Inline edit
+// =========================================================================
+function inlineEdit(cell, field, id) {
+  if (!isAdmin) return;
+  const original = cell.textContent.trim();
+  if (original === '—') cell.textContent = '';
+  const inp = document.createElement('input');
+  inp.className = 'cell-input';
+  inp.value = original === '—' ? '' : original;
+  cell.innerHTML = '';
+  cell.appendChild(inp);
+  inp.focus();
+
+  const save = async () => {
+    const newVal = inp.value.trim();
+    cell.textContent = newVal || '—';
+    if (newVal === original) return;
+    // Patch the item
+    const item = allInventory.find(d => d.id === id);
+    if (!item) return;
+    const updated = { ...item, [field]: field==='quantity' ? parseInt(newVal)||1 : newVal };
+    const res = await fetch(`/api/inventory/${id}`, {
+      method:'PUT', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(updated)
+    });
+    const data = await res.json();
+    if (data.ok) {
+      item[field] = updated[field];
+      toast('Saved', 'success');
+      updateStats();
+    } else {
+      toast('Save failed', 'error');
+    }
+  };
+
+  inp.addEventListener('blur',  save);
+  inp.addEventListener('keydown', e => {
+    if (e.key==='Enter') inp.blur();
+    if (e.key==='Escape') { cell.textContent = original; }
+  });
+}
+
+// =========================================================================
+// Add / Edit modal
+// =========================================================================
+function openAddModal() {
+  if (!isAdmin) { toast('Admin access required', 'error'); return; }
+  document.getElementById('deviceModalTitle').textContent = 'Add Device';
+  document.getElementById('deviceId').value = '';
+  ['fName','fBrand','fModel','fSerial','fAsset','fIp','fMac','fNotes']
+    .forEach(id => document.getElementById(id).value = '');
+  document.getElementById('fQty').value  = 1;
+  document.getElementById('fType').value = 'Switch';
+  document.getElementById('deviceOverlay').classList.remove('hidden');
+}
+
+function openEditModal(id) {
+  if (!isAdmin) { toast('Admin access required', 'error'); return; }
+  const d = allInventory.find(i => i.id===id);
+  if (!d) return;
+  document.getElementById('deviceModalTitle').textContent = 'Edit Device';
+  document.getElementById('deviceId').value   = d.id;
+  document.getElementById('fName').value      = d.device_name   || '';
+  document.getElementById('fType').value      = d.device_type   || 'Switch';
+  document.getElementById('fBrand').value     = d.brand         || '';
+  document.getElementById('fModel').value     = d.model         || '';
+  document.getElementById('fQty').value    = d.quantity      || 1;
+  document.getElementById('fSerial').value = d.serial_number || '';
+  document.getElementById('fAsset').value  = d.asset_tag     || '';
+  document.getElementById('fIp').value     = d.ip_address    || '';
+  document.getElementById('fMac').value    = d.mac_address   || '';
+  document.getElementById('fNotes').value  = d.notes         || '';
+  document.getElementById('deviceOverlay').classList.remove('hidden');
+}
+
+function closeDeviceModal() {
+  document.getElementById('deviceOverlay').classList.add('hidden');
+}
+
+async function saveDevice() {
+  if (!isAdmin) { toast('Admin access required', 'error'); return; }
+  const name = document.getElementById('fName').value.trim();
+  if (!name) { toast('Device name is required', 'error'); return; }
+
+  const btn  = document.getElementById('saveDeviceBtn');
+  btn.disabled = true;
+
+  const payload = {
+    device_name:   name,
+    device_type:   document.getElementById('fType').value,
+    brand:         document.getElementById('fBrand').value.trim(),
+    model:         document.getElementById('fModel').value.trim(),
+    quantity:      parseInt(document.getElementById('fQty').value)||1,
+    serial_number: document.getElementById('fSerial').value.trim(),
+    asset_tag:     document.getElementById('fAsset').value.trim(),
+    ip_address:    document.getElementById('fIp').value.trim(),
+    mac_address:   document.getElementById('fMac').value.trim(),
+    notes:         document.getElementById('fNotes').value.trim(),
+  };
+
+  const id  = document.getElementById('deviceId').value;
+  const url = id ? `/api/inventory/${id}` : '/api/inventory';
+  const res = await fetch(url, {
+    method: id ? 'PUT' : 'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify(payload)
+  });
+  const data = await res.json();
+  btn.disabled = false;
+
+  if (data.ok || data.id) {
+    closeDeviceModal();
+    await loadInventory();
+    await loadAudit();
+    toast(id ? 'Device updated' : 'Device added', 'success');
+  } else {
+    toast(data.error || 'Save failed', 'error');
+  }
+}
+
+// =========================================================================
+// Delete
+// =========================================================================
+async function deleteItem(id, name) {
+  if (!isAdmin) { toast('Admin access required', 'error'); return; }
+  if (!confirm(`⚠️ Delete "${name}"?\n\nThis action cannot be undone.`)) return;
+  const res  = await fetch(`/api/inventory/${id}`, { method:'DELETE' });
+  const data = await res.json();
+  if (data.ok) {
+    await loadInventory();
+    await loadAudit();
+    toast(`"${name}" deleted`, 'info');
+  } else {
+    toast(data.error || 'Delete failed', 'error');
+  }
+}
+
+// =========================================================================
+// Import
+// =========================================================================
+async function handleImport(event) {
+  if (!isAdmin) { toast('Admin access required', 'error'); return; }
+  const file = event.target.files[0];
+  if (!file) return;
+  event.target.value = '';
+
+  toast('Preparing import preview…', 'info');
+  const fd = new FormData();
+  fd.append('file', file);
+
+  try {
+    const res  = await fetch('/import/excel', { method:'POST', body: fd });
+    const data = await res.json();
+    if (!data.ok) {
+      toast(data.error || 'Import preview failed', 'error');
+      return;
+    }
+    openImportReviewModal(data);
+  } catch(e) {
+    toast('Import failed: ' + e.message, 'error');
+  }
+}
+
+function closeImportModal() {
+  document.getElementById('importOverlay').classList.add('hidden');
+}
+
+function openImportReviewModal(data) {
+  const summary = [];
+  summary.push(`<p style="color:var(--success);font-size:15px;font-weight:600">Preview ready</p>`);
+  summary.push(`<p>${data.new_items.length} new item(s) will be created.</p>`);
+  summary.push(`<p>${data.duplicates.length} duplicate row(s) detected.</p>`);
+  document.getElementById('importReviewSummary').innerHTML = summary.join('');
+
+  const duplicates = data.duplicates.map((dup, index) => {
+    const existing = dup.existing || {};
+    const incoming = dup.incoming || {};
+    return `
+      <div style="border:1px solid var(--border);border-radius:12px;padding:12px;margin:10px 0;background:var(--surface2)">
+        <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap">
+          <strong>Row ${dup.row} ➜ ${esc(incoming.device_name)}</strong>
+          <select id="dupAction_${index}" style="min-width:160px;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text)">
+            <option value="merge">Merge quantity</option>
+            <option value="replace">Replace existing</option>
+            <option value="skip">Skip</option>
+          </select>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px;font-size:13px;">
+          <div>
+            <div style="font-size:12px;color:var(--muted);margin-bottom:4px">Existing</div>
+            <div>${esc(existing.device_name||'—')} / ${esc(existing.brand||'')} ${esc(existing.model||'')}</div>
+            <div>Qty: ${esc(existing.quantity||'0')}</div>
+            <div>Serial: ${esc(existing.serial_number||'—')}</div>
+            <div>IP: ${esc(existing.ip_address||'—')}</div>
+          </div>
+          <div>
+            <div style="font-size:12px;color:var(--muted);margin-bottom:4px">Incoming</div>
+            <div>${esc(incoming.device_name||'—')} / ${esc(incoming.brand||'')} ${esc(incoming.model||'')}</div>
+            <div>Qty: ${esc(incoming.quantity||'1')}</div>
+            <div>Serial: ${esc(incoming.serial_number||'—')}</div>
+            <div>IP: ${esc(incoming.ip_address||'—')}</div>
+          </div>
+        </div>
+      </div>`;
+  }).join('');
+  document.getElementById('importDuplicates').innerHTML = duplicates || '<div style="color:var(--muted);padding:14px">No duplicates found.</div>';
+  document.getElementById('importReviewOverlay').dataset.preview = JSON.stringify(data);
+  document.getElementById('importReviewOverlay').classList.remove('hidden');
+}
+
+function closeImportReviewModal() {
+  document.getElementById('importReviewOverlay').classList.add('hidden');
+  document.getElementById('importReviewOverlay').dataset.preview = '';
+}
+
+async function applyImportReview() {
+  const preview = JSON.parse(document.getElementById('importReviewOverlay').dataset.preview || '{}');
+  if (!preview || !preview.new_items) {
+    toast('Nothing to apply', 'error');
+    return;
+  }
+
+  const duplicate_actions = preview.duplicates.map((dup, index) => {
+    const action = document.getElementById(`dupAction_${index}`).value;
+    return {
+      existing_id: dup.existing.id,
+      incoming: dup.incoming,
+      action,
+    };
+  }).filter(item => item.action !== 'skip');
+
+  document.getElementById('applyImportBtn').disabled = true;
+  try {
+    const res = await fetch('/import/excel/apply', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ new_items: preview.new_items, duplicate_actions })
+    });
+    const data = await res.json();
+    document.getElementById('applyImportBtn').disabled = false;
+    if (!data.ok) {
+      toast(data.error || 'Import apply failed', 'error');
+      return;
+    }
+    closeImportReviewModal();
+    let html = `<p style="color:var(--success);font-size:15px;font-weight:600">
+      ✅ Import applied: <strong>${data.added}</strong> added, <strong>${data.updated}</strong> updated</p>`;
+    if (data.errors && data.errors.length) {
+      html += `<div class="skipped-list">${data.errors.map(esc).join('<br>')}</div>`;
+    }
+    document.getElementById('importReport').innerHTML = html;
+    document.getElementById('importOverlay').classList.remove('hidden');
+    await loadInventory();
+    await loadAudit();
+  } catch (e) {
+    document.getElementById('applyImportBtn').disabled = false;
+    toast('Import apply failed: ' + e.message, 'error');
+  }
+}
+
+// =========================================================================
+// Audit Log
+// =========================================================================
+async function loadAudit() {
+  try {
+    const res = await fetch('/api/audit');
+    allAudit  = await res.json();
+    applyAuditFilters();
+  } catch(e) {}
+}
+
+function applyAuditFilters() {
+  const q      = document.getElementById('auditSearch').value.toLowerCase();
+  const action = document.getElementById('auditActionFilter').value;
+  const sort   = document.getElementById('auditSort').value;
+  const canAdminUndo = '{{ user_role }}' === 'admin';
+
+  let rows = allAudit.filter(r => {
+    const matchQ = !q || [r.username,r.display_name,r.action,r.item_name,r.reason,r.ip_address,r.mac_address]
+                          .some(v => v && v.toLowerCase().includes(q));
+    const matchA = !action || r.action === action;
+    return matchQ && matchA;
+  });
+
+  rows.sort((a,b) => {
+    const cmp = a.timestamp.localeCompare(b.timestamp);
+    return sort==='asc' ? cmp : -cmp;
+  });
+
+  const tbody = document.getElementById('auditBody');
+  if (!rows.length) {
+    const colspan = canAdminUndo ? 9 : 8;
+    tbody.innerHTML = `<tr><td colspan="${colspan}" style="text-align:center;padding:24px;color:var(--muted)">No audit entries</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = rows.map(r => {
+    const undoCell = canAdminUndo && ['ADD','EDIT','DELETE','IMPORT_ADD','IMPORT_MERGE','IMPORT_REPLACE'].includes(r.action)
+      ? `<td><button class="btn btn-sm btn-ghost" onclick="undoAuditAction(${r.id},'${esc(r.action)}')">⟲ Undo</button></td>`
+      : '';
+    return `
+    <tr>
+      <td style="font-size:12px;color:var(--muted);white-space:nowrap">${fmtDate(r.timestamp)}</td>
+      <td>${esc(r.display_name||r.username)}</td>
+      <td style="font-size:12px;color:var(--muted)">${esc(r.ip_address||'')}</td>
+      <td style="font-size:12px;color:var(--muted)">${esc(r.mac_address||'')}</td>
+      <td>${actionBadge(r.action)}</td>
+      <td>${esc(r.item_name||'—')}</td>
+      <td style="color:var(--muted);font-size:12px">${esc(r.reason||'')}</td>
+      <td style="color:var(--muted);font-size:12px;max-width:200px;overflow:hidden;text-overflow:ellipsis">${esc(r.details||'')}</td>
+      ${undoCell}
+    </tr>`;
+  }).join('');
+}
+
+async function undoAuditAction(auditId, actionType) {
+  if (!confirm(`⚠️ Undo ${actionType} action?\n\nThis will reverse the recorded change.`)) return;
+  
+  try {
+    const res = await fetch(`/api/audit/${auditId}/undo`, {method:'POST'});
+    const data = await res.json();
+    if (data.ok || res.status === 400) {
+      await loadInventory();
+      await loadAudit();
+      toast(data.message || `Undo completed`, 'info');
+    } else {
+      toast(data.error || 'Undo failed', 'error');
+    }
+  } catch(e) {
+    toast('Error: ' + e.message, 'error');
+  }
+}
+
+async function redoLastAction() {
+  try {
+    const res = await fetch('/api/audit/redo', { method:'POST' });
+    const data = await res.json();
+    if (data.ok) {
+      await loadInventory();
+      await loadAudit();
+      toast(data.message || 'Redo completed', 'success');
+    } else {
+      toast(data.error || 'Redo failed', 'error');
+    }
+  } catch (e) {
+    toast('Error: ' + e.message, 'error');
+  }
+}
+
+async function clearAuditLog() {
+  if (!confirm('⚠️ Clear the audit log? This cannot be undone.')) return;
+  try {
+    const res = await fetch('/api/audit/clear', { method: 'POST' });
+    const data = await res.json();
+    if (data.ok) {
+      await loadAudit();
+      toast(data.message || 'Audit log cleared', 'success');
+    } else {
+      toast(data.error || 'Failed to clear audit log', 'error');
+    }
+  } catch (e) {
+    toast('Error: ' + e.message, 'error');
+  }
+}
+
+// =========================================================================
+// Helpers
+// =========================================================================
+function esc(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function statusBadge(status) {
+  const map = {
+    'Active':   'badge-active',
+    'Inactive': 'badge-inactive',
+    'Spare':    'badge-spare',
+  };
+  const cls = map[status] || 'badge-default';
+  return `<span class="badge ${cls}">${esc(status||'Unknown')}</span>`;
+}
+
+function actionBadge(action) {
+  const map = {
+    'LOGIN':'accent','LOGOUT':'muted','ADD':'success',
+    'EDIT':'warning','DELETE':'danger','IMPORT':'accent','EXPORT':'muted',
+  };
+  const color = `var(--${map[action]||'muted'})`;
+  return `<span style="font-size:11px;font-weight:600;color:${color}">${esc(action)}</span>`;
+}
+
+function fmtDate(iso) {
+  if (!iso) return '';
+  const d = new Date(iso + (iso.endsWith('Z') ? '' : 'Z'));
+  return d.toLocaleString();
+}
+
+function toast(msg, type='info') {
+  const el = document.createElement('div');
+  el.className = `toast ${type}`;
+  const icons = {success:'✅', error:'❌', info:'ℹ️'};
+  el.innerHTML = `<span>${icons[type]||'ℹ️'}</span><span>${esc(msg)}</span>`;
+  const container = document.getElementById('toast-container');
+  container.appendChild(el);
+  setTimeout(() => {
+    el.style.transition = 'opacity .4s';
+    el.style.opacity = '0';
+    setTimeout(() => el.remove(), 400);
+  }, 3200);
+}
+
+// Close modals on overlay click
+document.getElementById('deviceOverlay').addEventListener('click', function(e) {
+  if (e.target === this) closeDeviceModal();
+});
+document.getElementById('importReviewOverlay').addEventListener('click', function(e) {
+  if (e.target === this) closeImportReviewModal();
+});
+document.getElementById('importOverlay').addEventListener('click', function(e) {
+  if (e.target === this) closeImportModal();
+});
+</script>
+</body>
+</html>
