@@ -105,6 +105,17 @@ def init_db():
             reason      TEXT,
             details     TEXT
         );
+
+        CREATE TABLE IF NOT EXISTS quantity_changes (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            item_id     INTEGER NOT NULL,
+            old_quantity INTEGER NOT NULL,
+            new_quantity INTEGER NOT NULL,
+            reason      TEXT,
+            username    TEXT NOT NULL,
+            timestamp   TEXT NOT NULL,
+            FOREIGN KEY (item_id) REFERENCES inventory (id)
+        );
     """)
 
     existing_columns = [row[1] for row in db.execute("PRAGMA table_info(audit_log)").fetchall()]
@@ -270,8 +281,27 @@ def log_action(action, item_id=None, item_name=None, details=None, mac_address=N
 @app.route("/", methods=["GET"])
 def index():
     if "user_id" in session:
-        return redirect(url_for("inventory"))
+        return redirect(url_for("dashboard"))
     return redirect(url_for("login"))
+
+
+@app.route("/dashboard")
+@login_required
+def dashboard():
+    db = get_db()
+    # Stats
+    total_users = db.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+    total_devices = db.execute("SELECT COUNT(*) FROM inventory").fetchone()[0]
+    total_quantity = db.execute("SELECT SUM(quantity) FROM inventory").fetchone()[0] or 0
+    last_login = db.execute("SELECT username, timestamp FROM audit_log WHERE action='LOGIN' ORDER BY timestamp DESC LIMIT 1").fetchone()
+    last_login_info = last_login and f"{last_login['username']} on {last_login['timestamp'][:10]}" or "None"
+    # Simple chart data: devices by type
+    device_types = db.execute("SELECT device_type, COUNT(*) as count FROM inventory GROUP BY device_type").fetchall()
+    chart_data = [{"type": r["device_type"] or "Other", "count": r["count"]} for r in device_types]
+    return render_template("dashboard.html", user_role=session.get("role"), 
+                           total_users=total_users, total_devices=total_devices, 
+                           total_quantity=total_quantity, last_login=last_login_info,
+                           chart_data=chart_data)
 
 
 @app.route("/login", methods=["GET", "POST"])
@@ -554,6 +584,25 @@ def api_update_item(item_id):
         ),
     )
     db.commit()
+
+    # Record quantity change if applicable
+    if old_item["quantity"] != updated_item["quantity"]:
+        reason = data.get("reason", "")
+        db.execute(
+            """INSERT INTO quantity_changes
+               (item_id, old_quantity, new_quantity, reason, username, timestamp)
+               VALUES (?, ?, ?, ?, ?, ?)""",
+            (
+                item_id,
+                old_item["quantity"],
+                updated_item["quantity"],
+                reason,
+                session.get("username"),
+                now,
+            ),
+        )
+        db.commit()
+
     detail_text = changes and "; ".join(changes) or "No changes"
     audit_id = log_action(
         "EDIT",
@@ -687,6 +736,25 @@ def users_page():
     return render_template("users.html", user_role=session.get("role"))
 
 
+@app.route("/movements")
+@login_required
+def movements_page():
+    return render_template("movements.html", user_role=session.get("role"))
+
+
+@app.route("/api/movements")
+@login_required
+def api_movements():
+    db = get_db()
+    rows = db.execute("""
+        SELECT qc.*, i.device_name, i.serial_number, i.asset_tag
+        FROM quantity_changes qc
+        JOIN inventory i ON qc.item_id = i.id
+        ORDER BY qc.timestamp DESC
+    """).fetchall()
+    return jsonify([dict(r) for r in rows])
+
+
 # ---------------------------------------------------------------------------
 # Routes – Export
 # ---------------------------------------------------------------------------
@@ -694,23 +762,48 @@ def users_page():
 @app.route("/export/inventory")
 @login_required
 def export_inventory():
-    db   = get_db()
-    rows = db.execute("SELECT * FROM inventory ORDER BY id").fetchall()
-    si   = io.StringIO()
+    db = get_db()
+    search = request.args.get('search', '').strip()
+    type_filter = request.args.get('type', '').strip()
+    
+    query = "SELECT * FROM inventory WHERE 1=1"
+    params = []
+    
+    if search:
+        query += " AND (device_name LIKE ? OR brand LIKE ? OR model LIKE ? OR serial_number LIKE ? OR ip_address LIKE ? OR mac_address LIKE ?)"
+        like_search = f"%{search}%"
+        params.extend([like_search] * 6)
+    
+    if type_filter:
+        query += " AND device_type = ?"
+        params.append(type_filter)
+    
+    query += " ORDER BY id"
+    
+    rows = db.execute(query, params).fetchall()
+    si = io.StringIO()
     writer = csv.writer(si)
-    writer.writerow([
+
+    include_network = session.get("role") != "viewer"
+    headers = [
         "ID", "Serial Number", "Asset Tag", "Device Name", "Type",
-        "Brand", "Model", "Quantity", "IP Address", "MAC Address",
-        "Notes", "Created At", "Updated At",
-    ])
+        "Brand", "Model", "Quantity",
+    ]
+    if include_network:
+        headers.extend(["IP Address", "MAC Address"])
+    headers.extend(["Notes", "Created At", "Updated At"])
+    writer.writerow(headers)
+
     for r in rows:
-        writer.writerow([
+        row = [
             r["id"], r["serial_number"], r["asset_tag"], r["device_name"],
             r["device_type"], r["brand"], r["model"], r["quantity"],
-            r["ip_address"], r["mac_address"], r["notes"],
-            r["created_at"], r["updated_at"],
-        ])
-    log_action("EXPORT", details="Inventory CSV export")
+        ]
+        if include_network:
+            row.extend([r["ip_address"], r["mac_address"]])
+        row.extend([r["notes"], r["created_at"], r["updated_at"]])
+        writer.writerow(row)
+    log_action("EXPORT", details=f"Inventory CSV export ({len(rows)} items)")
     output = io.BytesIO()
     output.write(si.getvalue().encode("utf-8-sig"))
     output.seek(0)

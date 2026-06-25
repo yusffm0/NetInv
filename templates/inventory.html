@@ -41,6 +41,16 @@ body { font-family:'Inter',sans-serif; background:var(--bg); color:var(--text);
 .topbar-actions { margin-left:auto; display:flex; align-items:center; gap:10px; }
 .user-chip { font-size:12px; color:var(--muted); }
 
+/* ===== Tabs ===== */
+.tabs { display:flex; gap:0; margin-bottom:24px; }
+.tab { padding:12px 20px; background:var(--surface2); border:1px solid var(--border); cursor:pointer; transition:.15s; }
+.tab.active { background:var(--accent); color:#fff; border-color:var(--accent); }
+.tab:hover:not(.active) { background:var(--surface); }
+
+/* ===== Tab content ===== */
+.tab-content { display:none; }
+.tab-content.active { display:block; }
+
 /* ===== Buttons ===== */
 .btn {
   display:inline-flex; align-items:center; gap:6px;
@@ -254,7 +264,14 @@ tbody tr:last-child td { border-bottom:none; }
   </div>
 </nav>
 
-<div class="page">
+<!-- Tabs -->
+<div class="tabs">
+  <div class="tab active" onclick="switchTab('inventory')">Inventory</div>
+  <div class="tab" onclick="switchTab('movements')">Movements</div>
+  <div class="tab" onclick="switchTab('logs')">Logs</div>
+</div>
+
+<div id="inventory-tab" class="tab-content active">
 
   <!-- Stats row -->
   <div class="stats-row" id="statsRow">
@@ -268,7 +285,7 @@ tbody tr:last-child td { border-bottom:none; }
   <div class="section-hdr">
     <h2>Inventory</h2>
     <div style="display:flex;gap:8px">
-      <a href="/export/inventory" class="btn btn-ghost btn-sm">Export CSV</a>
+      <a href="#" onclick="exportFiltered()" class="btn btn-ghost btn-sm">Export CSV</a>
       {% if user_role == 'admin' %}
       <button class="btn btn-primary btn-sm" onclick="openAddModal()">＋ Add Device</button>
       {% endif %}
@@ -315,9 +332,53 @@ tbody tr:last-child td { border-bottom:none; }
       <div class="pagination-btns" id="pgBtns"></div>
     </div>
   </div>
+</div>
 
+<div id="movements-tab" class="tab-content">
+  <!-- Movements section -->
+  <div class="section-hdr">
+    <h2>Quantity Movements</h2>
+  </div>
+
+  <!-- Toolbar -->
+  <div class="toolbar">
+    <input class="toolbar-search" id="movementsSearch" placeholder="🔍  Search movements…" oninput="applyMovementsFilters()">
+    <select class="select-filter" id="movementsActionFilter" onchange="applyMovementsFilters()">
+      <option value="">All Actions</option>
+      <option>INCREASE</option><option>DECREASE</option>
+    </select>
+  </div>
+
+  <!-- Table -->
+  <div class="table-container">
+    <table class="data-table" id="movementsTable">
+      <thead>
+        <tr>
+          <th>Device Name</th>
+          <th>Action</th>
+          <th>Old Qty</th>
+          <th>New Qty</th>
+          <th>Change</th>
+          <th>Reason</th>
+          <th>User</th>
+          <th>Timestamp</th>
+        </tr>
+      </thead>
+      <tbody id="movementsBody">
+        <tr><td colspan="8" style="text-align:center;padding:40px;color:var(--muted)">
+          <div class="spinner" style="margin:0 auto 12px"></div>Loading…
+        </td></tr>
+      </tbody>
+    </table>
+    <div class="pagination">
+      <span id="movementsPageInfo">—</span>
+      <div class="pagination-btns" id="movementsPgBtns"></div>
+    </div>
+  </div>
+</div>
+
+<div id="logs-tab" class="tab-content">
   <!-- Audit Log section -->
-  <hr class="section-divider">
   <div class="section-hdr">
     <h2>Audit Log</h2>
     <div style="display:flex;gap:8px">
@@ -360,10 +421,11 @@ tbody tr:last-child td { border-bottom:none; }
         </tr>
       </thead>
       <tbody id="auditBody">
-        <tr><td colspan="8" style="text-align:center;padding:30px;color:var(--muted)">Loading…</td></tr>
+        <tr><td colspan="{{ 9 if user_role == 'admin' else 8 }}" style="text-align:center;padding:30px;color:var(--muted)">Loading…</td></tr>
       </tbody>
     </table>
   </div>
+</div>
 </div><!-- /page -->
 
 <!-- ===== ADD / EDIT DEVICE MODAL ===== -->
@@ -462,6 +524,22 @@ tbody tr:last-child td { border-bottom:none; }
   </div>
 </div>
 
+<!-- ===== QUANTITY CHANGE REASON MODAL ===== -->
+<div class="overlay hidden" id="reasonOverlay">
+  <div class="modal" style="max-width:400px">
+    <h2>Quantity Change Reason</h2>
+    <p class="sub">Why is the quantity changing? (e.g., "Moved to server room", "Damaged", etc.)</p>
+    <div class="form-group">
+      <label>Reason *</label>
+      <input type="text" id="reasonInput" placeholder="Enter reason for change">
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeReasonModal()">Cancel</button>
+      <button class="btn btn-primary" id="confirmReasonBtn" onclick="confirmReason()">Confirm</button>
+    </div>
+  </div>
+</div>
+
 <!-- ===== TOAST CONTAINER ===== -->
 <div id="toast-container"></div>
 
@@ -472,6 +550,7 @@ tbody tr:last-child td { border-bottom:none; }
 let allInventory = [];
 let filteredInventory = [];
 let allAudit = [];
+let allMovements = [];
 let currentPage = 1;
 let pageSize = 25;
 let sortKey = 'id';
@@ -487,7 +566,25 @@ document.addEventListener('DOMContentLoaded', () => {
 
   loadInventory();
   loadAudit();
+  loadMovements();
 });
+
+// =========================================================================
+// Tab Switching
+// =========================================================================
+function switchTab(tab) {
+  // Hide all tabs
+  document.querySelectorAll('.tab-content').forEach(tc => tc.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  
+  // Show selected tab
+  document.getElementById(tab + '-tab').classList.add('active');
+  document.querySelector(`.tab[onclick="switchTab('${tab}')"]`).classList.add('active');
+  
+  // Load data if needed
+  if (tab === 'movements') loadMovements();
+  if (tab === 'logs') loadAudit();
+}
 
 // =========================================================================
 // Audit Check-in
@@ -581,7 +678,7 @@ function renderTable() {
   const start = (currentPage-1) * pageSize;
   const slice = filteredInventory.slice(start, start + pageSize);
 
-  const colCount = isAdmin ? 9 : 8;
+  const colCount = '{{ user_role }}' === 'viewer' ? 7 : (isAdmin ? 9 : 8);
   if (!slice.length) {
     tbody.innerHTML = `<tr><td colspan="${colCount}" style="text-align:center;padding:40px;color:var(--muted)">No items found</td></tr>`;
     renderPagination(0, 0, 0); return;
@@ -593,6 +690,8 @@ function renderTable() {
         <button class="btn btn-ghost btn-sm" onclick="openEditModal(${d.id})">✏️ Edit</button>
         <button class="btn btn-danger btn-sm" onclick="deleteItem(${d.id}, ${JSON.stringify(esc(d.device_name))})">🗑</button>
       </td>` : '';
+    const ipCell = '{{ user_role }}' !== 'viewer' ? `<td${isAdmin ? ` class="editable-cell" ondblclick="inlineEdit(this,'ip_address',${d.id})"` : ''}>${esc(d.ip_address||'—')}</td>` : '';
+    const macCell = '{{ user_role }}' !== 'viewer' ? `<td${isAdmin ? ` class="editable-cell" ondblclick="inlineEdit(this,'mac_address',${d.id})"` : ''}>${esc(d.mac_address||'—')}</td>` : '';
     return `
     <tr data-id="${d.id}">
       <td style="color:var(--muted);font-size:12px">${d.id}</td>
@@ -601,8 +700,8 @@ function renderTable() {
       <td${isAdmin ? ` class="editable-cell" ondblclick="inlineEdit(this,'brand',${d.id})"` : ''}>${esc(d.brand||'')}</td>
       <td${isAdmin ? ` class="editable-cell" ondblclick="inlineEdit(this,'model',${d.id})"` : ''}>${esc(d.model||'')}</td>
       <td${isAdmin ? ` class="editable-cell" ondblclick="inlineEdit(this,'quantity',${d.id})"` : ''} style="font-weight:600">${d.quantity||1}</td>
-      <td${isAdmin ? ` class="editable-cell" ondblclick="inlineEdit(this,'ip_address',${d.id})"` : ''}>${esc(d.ip_address||'—')}</td>
-      <td${isAdmin ? ` class="editable-cell" ondblclick="inlineEdit(this,'mac_address',${d.id})"` : ''}>${esc(d.mac_address||'—')}</td>
+      ${ipCell}
+      ${macCell}
       ${actionCell}
     </tr>`;
   }).join('');
@@ -664,13 +763,24 @@ function inlineEdit(cell, field, id) {
     const newVal = inp.value.trim();
     cell.textContent = newVal || '—';
     if (newVal === original) return;
+    // If quantity changed, prompt for reason
+    let reason = null;
+    if (field === 'quantity') {
+      reason = await promptReason();
+      if (reason === null) {
+        cell.textContent = original;
+        return;
+      }
+    }
     // Patch the item
     const item = allInventory.find(d => d.id === id);
     if (!item) return;
     const updated = { ...item, [field]: field==='quantity' ? parseInt(newVal)||1 : newVal };
+    const payload = { ...updated };
+    if (reason) payload.reason = reason;
     const res = await fetch(`/api/inventory/${id}`, {
       method:'PUT', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify(updated)
+      body: JSON.stringify(payload)
     });
     const data = await res.json();
     if (data.ok) {
@@ -814,6 +924,35 @@ function closeImportModal() {
   document.getElementById('importOverlay').classList.add('hidden');
 }
 
+function promptReason() {
+  return new Promise((resolve) => {
+    document.getElementById('reasonInput').value = '';
+    document.getElementById('reasonOverlay').classList.remove('hidden');
+    document.getElementById('confirmReasonBtn').onclick = () => {
+      const reason = document.getElementById('reasonInput').value.trim();
+      if (!reason) {
+        toast('Reason is required', 'error');
+        return;
+      }
+      closeReasonModal();
+      resolve(reason);
+    };
+    // Cancel
+    document.getElementById('reasonOverlay').querySelector('.btn-ghost').onclick = () => {
+      closeReasonModal();
+      resolve(null);
+    };
+  });
+}
+
+function closeReasonModal() {
+  document.getElementById('reasonOverlay').classList.add('hidden');
+}
+
+function confirmReason() {
+  // Handled in promptReason
+}
+
 function openImportReviewModal(data) {
   const summary = [];
   summary.push(`<p style="color:var(--success);font-size:15px;font-weight:600">Preview ready</p>`);
@@ -904,6 +1043,64 @@ async function applyImportReview() {
     document.getElementById('applyImportBtn').disabled = false;
     toast('Import apply failed: ' + e.message, 'error');
   }
+}
+
+// =========================================================================
+// Movements
+// =========================================================================
+async function loadMovements() {
+  try {
+    const res = await fetch('/api/movements');
+    allMovements = await res.json();
+    applyMovementsFilters();
+  } catch(e) {
+    toast('Failed to load movements', 'error');
+  }
+}
+
+function applyMovementsFilters() {
+  const q      = document.getElementById('movementsSearch').value.toLowerCase();
+  const action = document.getElementById('movementsActionFilter').value;
+
+  let rows = allMovements.filter(r => {
+    const matchQ = !q || [r.device_name, r.action, r.reason, r.username, r.display_name]
+                          .some(v => v && v.toLowerCase().includes(q));
+    const matchA = !action || r.action === action;
+    return matchQ && matchA;
+  });
+
+  rows.sort((a,b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+  const tbody = document.getElementById('movementsBody');
+  if (!rows.length) {
+    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--muted)">No movements</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = rows.map(r => `
+    <tr>
+      <td>${r.device_name || 'Unknown'}</td>
+      <td><span class="badge ${r.action === 'INCREASE' ? 'success' : 'danger'}">${r.action}</span></td>
+      <td>${r.old_quantity}</td>
+      <td>${r.new_quantity}</td>
+      <td>${r.change > 0 ? '+' : ''}${r.change}</td>
+      <td>${r.reason || '-'}</td>
+      <td>${r.display_name || r.username}</td>
+      <td>${new Date(r.timestamp).toLocaleString()}</td>
+    </tr>
+  `).join('');
+}
+
+// =========================================================================
+// Export
+// =========================================================================
+function exportFiltered() {
+  const search = document.getElementById('searchInput').value;
+  const typeFilter = document.getElementById('typeFilter').value;
+  let url = '/export/inventory?';
+  if (search) url += `search=${encodeURIComponent(search)}&`;
+  if (typeFilter) url += `type=${encodeURIComponent(typeFilter)}&`;
+  window.location.href = url.slice(0, -1); // remove trailing &
 }
 
 // =========================================================================
